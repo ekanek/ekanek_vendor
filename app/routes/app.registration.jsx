@@ -8,9 +8,16 @@ import {
   Page,
   Select,
   DropZone,
+  LegacyStack,
+  Thumbnail,
+  Text,
 } from "@shopify/polaris";
-import { TitleBar } from "@shopify/app-bridge-react";
 import { useState, useReducer, useEffect, useCallback } from "react";
+import { useFetcher } from "@remix-run/react";
+import {NoteIcon} from '@shopify/polaris-icons';
+import { authenticate } from "../shopify.server";
+import { json } from "@remix-run/react";
+import axios from "axios";
 
 const states = [
   { label: "Delhi", value: "delhi" },
@@ -36,11 +43,59 @@ function formReducer(state, action) {
   };
 }
 
+const validImageTypes = ['image/gif', 'image/jpeg', 'image/png'];
+
+export async function action({ request }) {
+  const formData = await request.formData();
+  const { session } = await authenticate.admin(request);
+  const { accessToken } = session;
+
+  const data = {};
+  formData.forEach((value, key) => {
+    data[key] = value;
+  });
+
+  console.log(session, '-sdscsscsnjcjncsjcs');
+
+  try {
+    const response = await axios.post(
+      "https://76ff-122-176-112-186.ngrok-free.app/ekstore_sales_channel/ekstore_registered_vendors",
+      {ekstore_registered_vendor: data},
+      {
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": accessToken,
+        }, // Sending data as params
+      }
+    );
+    // const response = await fetch(
+    //   "https://8735-122-176-112-186.ngrok-free.app/ekstore_sales_channel/ekstore_registered_vendors",
+    //   {
+    //     method: "POST",
+    //     headers: {
+    //       "Content-Type": "application/json",
+    //       "X-Shopify-Access-Token": accessToken,
+    //     },
+    //     param: formData,
+    //   },
+    // );
+
+    if (!response.ok) {
+      throw new Error("Failed to submit form");
+    }
+
+    return json({ success: true });
+  } catch (error) {
+    return json({ success: false, error: error.message });
+  }
+}
+
 export default function Registration() {
   const [currentStep, setCurrentStep] = useState(0);
   const [state, dispatch] = useReducer(formReducer, initialState);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const fetcher = useFetcher();
 
   const validateStep = () => {
     const currentFields = stepsConfig[currentStep].fields;
@@ -49,7 +104,7 @@ export default function Registration() {
 
     currentFields.forEach(({ field, type, required }) => {
       if (required) {
-        if (!state[section][field] || state[section][field].trim() === "") {
+        if (!state[section][field] || state[section][field] === "") {
           newErrors[field] = "This field is required";
         } else if (type === "file" && !state[section][field]) {
           newErrors[field] = "Please upload a file";
@@ -85,33 +140,20 @@ export default function Registration() {
   }, []);
 
   const handleSubmit = async () => {
+    if (!validateStep()) return;
     setLoading(true);
     setErrors(null);
 
     const formData = new FormData();
     Object.keys(state).forEach((section) => {
       Object.keys(state[section]).forEach((field) => {
-        formData.append(field, state[section][field]);
+        formData.append(field, state?.[section]?.[field]);
       });
     });
 
-    console.log(formData, '-----------');
 
-    // try {
-    //   const response = await fetch('https://3e43-122-176-112-186.ngrok-free.app/ekstore_sales_channel/ekstore_registered_vendors', {
-    //     method: 'POST',
-    //     body: formData
-    //   });
-
-    //   if (!response.ok) {
-    //     throw new Error('Failed to submit form');
-    //   }
-    //   alert('Registration successful');
-    // } catch (err) {
-    //   setError(err.message);
-    // } finally {
-    //   setLoading(false);
-    // }
+    fetcher.submit(formData, { method: "post" });
+    setLoading(false);
   };
 
   const stepsConfig = [
@@ -166,8 +208,8 @@ export default function Registration() {
         },
         { label: "Brands *", field: "brands", required: true },
         {
-          label: "Vendor State *",
-          field: "vendor_state",
+          label: "State *",
+          field: "state",
           type: "select",
           required: true,
         },
@@ -195,7 +237,7 @@ export default function Registration() {
           field: "contact_person_name",
           required: true,
         },
-        { label: "Finance Email *", field: "finance_email", required: true },
+        { label: "Finance Email *", field: "finance_email_email", required: true },
       ],
     },
     {
@@ -269,34 +311,40 @@ export default function Registration() {
                   />
                 ) : type === "file" ? (
                   <div key={field} style={{ marginBottom: "10px" }}>
-                    {/* File Upload Label */}
-                    <label
-                      htmlFor={field}
-                      style={{
-                        fontWeight: "bold",
-                        display: "block",
-                        marginBottom: "5px",
-                      }}
-                    >
-                      {label}
-                    </label>
-
-                    {/* DropZone Component */}
                     <DropZone
                       key={field}
-                      onDrop={(files) =>
+                      allowMultiple={false}
+                      label={label}
+                      onDrop={(_dropFiles, acceptedFiles, _rejectedFiles) =>
                         handleFileUpload(
                           currentStepConfig.section,
                           field,
-                          files[0],
+                          acceptedFiles[0],
                         )
                       }
                     >
-                      <DropZone.FileUpload />
+                      {state[currentStepConfig.section]?.[field] && <LegacyStack>
+                        <Thumbnail
+                          size="small"
+                          alt={state[currentStepConfig.section]?.[field]?.name}
+                          source={
+                            validImageTypes.includes(state[currentStepConfig.section]?.[field]?.type)
+                              ? window.URL.createObjectURL(state[currentStepConfig.section]?.[field])
+                              : NoteIcon
+                          }
+                        />
+                        <div>
+                          {state[currentStepConfig.section]?.[field]?.name}{" "}
+                          <Text variant="bodySm" as="p">
+                            {state[currentStepConfig.section]?.[field]?.size} bytes
+                          </Text>
+                        </div>
+                      </LegacyStack>}
+                      <DropZone.FileUpload actionTitle={`${state[currentStepConfig.section]?.[field] ? 'Change' : 'Add'} File`} />
                     </DropZone>
 
                     {/* Show Validation Error if Any */}
-                    {errors[field] && (
+                    {errors && errors[field] && (
                       <p style={{ color: "red", marginTop: "5px" }}>
                         {errors[field]}
                       </p>
