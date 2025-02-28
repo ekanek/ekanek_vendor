@@ -50,46 +50,26 @@ export async function action({ request }) {
   const { session } = await authenticate.admin(request);
   const { accessToken } = session;
 
-  const data = {};
+  const data = new FormData();
+
   formData.forEach((value, key) => {
-    data[key] = value;
+    data.append(`${key}`, value);
   });
-
-  console.log(session, '-sdscsscsnjcjncsjcs');
-
-  try {
+  
     const response = await axios.post(
       "https://76ff-122-176-112-186.ngrok-free.app/ekstore_sales_channel/ekstore_registered_vendors",
-      {ekstore_registered_vendor: data},
+      data,
       {
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "multipart/form-data",
           "X-Shopify-Access-Token": accessToken,
-        }, // Sending data as params
+        },
       }
     );
-    // const response = await fetch(
-    //   "https://8735-122-176-112-186.ngrok-free.app/ekstore_sales_channel/ekstore_registered_vendors",
-    //   {
-    //     method: "POST",
-    //     headers: {
-    //       "Content-Type": "application/json",
-    //       "X-Shopify-Access-Token": accessToken,
-    //     },
-    //     param: formData,
-    //   },
-    // );
-
-    if (!response.ok) {
-      throw new Error("Failed to submit form");
-    }
-
-    return json({ success: true });
-  } catch (error) {
-    return json({ success: false, error: error.message });
-  }
-}
-
+  
+    console.log("Response status:", response.status);
+    console.log("Response data:", response.data);
+  } 
 export default function Registration() {
   const [currentStep, setCurrentStep] = useState(0);
   const [state, dispatch] = useReducer(formReducer, initialState);
@@ -145,15 +125,22 @@ export default function Registration() {
     setErrors(null);
 
     const formData = new FormData();
-    Object.keys(state).forEach((section) => {
-      Object.keys(state[section]).forEach((field) => {
-        formData.append(field, state?.[section]?.[field]);
-      });
+
+  Object.keys(state).forEach((section) => {
+    Object.keys(state[section]).forEach((field) => {
+      const value = state[section][field];
+
+      // Append files correctly
+      if (value instanceof File) {
+        formData.append(`ekstore_registered_vendor[${field}]`, value);
+      } else {
+        formData.append(`ekstore_registered_vendor[${field}]`, value);
+      }
     });
+  });
 
-
-    fetcher.submit(formData, { method: "post" });
-    setLoading(false);
+  fetcher.submit(formData, { method: "post", encType: "multipart/form-data" });
+  setLoading(false);
   };
 
   const stepsConfig = [
